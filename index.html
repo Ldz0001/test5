@@ -379,17 +379,45 @@ qs("#btnClearFilters")?.addEventListener("click", ()=>{ ["fSearch","fType","fSta
 
 /* ---------- Renderers (with null guards) ---------- */
 function renderKPIs(){
-  const elU=qs("#kpiUpcoming"), elC=qs("#kpiCompletion"), elO=qs("#kpiOverdue"), elR=qs("#kpiRating");
-  if(!(elU&&elC&&elO&&elR)) return;
-  const today=dayjs();
-  const upcoming=store.data.events.filter(e=>dayjs(e.eventDate).isSameOrAfter(today,"day")).length;
-  const total=store.data.tasks.length||0;
-  const done=store.data.tasks.filter(t=>t.status==="Completed").length;
-  const comp= total? Math.round((done/total)*100):0;
-  const ratings = store.data.notes.map(n=>Number(n.rating)).filter(n=>!isNaN(n));
-  const avg = ratings.length ? (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1) : "0.0";
-  const overdue = store.data.tasks.filter(isOverdue).length;
-  elU.textContent=upcoming; elC.textContent=comp+"%"; elO.textContent=overdue; elR.textContent=avg;
+  const elU = document.getElementById("kpiUpcoming");
+  const elC = document.getElementById("kpiCompletion");
+  const elO = document.getElementById("kpiOverdue");
+  const elR = document.getElementById("kpiRating");
+  if(!(elU && elC && elO && elR)) return;
+
+  const today = dayjs();
+
+  // Use the SAME filtered list the other tabs use
+  const evs = filteredEvents();
+
+  // Keep only tasks that belong to the filtered events
+  const eventIds = new Set(evs.map(e => e.id));
+  const tasks = (store.data.tasks || []).filter(t => eventIds.has(t.eventId));
+  const notes = (store.data.notes || []).filter(n => eventIds.has(n.eventId));
+
+  // KPI: Upcoming events (>= today)
+  const upcoming = evs.filter(e => e.eventDate && dayjs(e.eventDate).isSameOrAfter(today, "day")).length;
+
+  // KPI: Task completion %
+  const totalTasks = tasks.length;
+  const completed  = tasks.filter(t => t.status === "Completed").length;
+  const completion = totalTasks ? Math.round((completed / totalTasks) * 100) : 0;
+
+  // KPI: Overdue tasks
+  const overdue = tasks.filter(t => {
+    if (t.status === "Completed" || !t.dueDate) return false;
+    return dayjs(t.dueDate).isBefore(today, "day");
+  }).length;
+
+  // KPI: Average rating (from notes of filtered events)
+  const ratings = notes.map(n => Number(n.rating)).filter(v => Number.isFinite(v));
+  const avgRating = ratings.length ? (ratings.reduce((a,b)=>a+b,0) / ratings.length).toFixed(1) : "0.0";
+
+  // Paint
+  elU.textContent = String(upcoming);
+  elC.textContent = `${completion}%`;
+  elO.textContent = String(overdue);
+  elR.textContent = String(avgRating);
 }
 function renderEventsTable(){
   const tbody=qs("#tblEvents tbody"); if(!tbody) return; tbody.innerHTML="";
